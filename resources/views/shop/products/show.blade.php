@@ -1,17 +1,14 @@
-
 @extends('layouts.store')
 
 @section('title', $product->name)
 
 @section('content')
 @php
-    // ✅ Fixed: Handle both null and empty array cases
-    $images = (!empty($product->images) && is_array($product->images)) 
-        ? $product->images 
-        : ['/flower.png'];
-    
-    $stock = (int)($product->stock ?? $product->quantity ?? 0);
+    $stock  = (int)($product->stock ?? $product->quantity ?? 0);
     $rating = (int)($product->rating ?? $product->average_rating ?? 0);
+
+    $mainImage = $product->main_image_url;       // accessor
+    $gallery   = $product->gallery_urls;         // accessor returns array of URLs
 @endphp
 
 <div class="bg-gray-50 min-h-screen">
@@ -29,7 +26,7 @@
             <div class="space-y-4">
                 <div class="relative bg-white rounded-3xl overflow-hidden shadow-lg border-2 border-gray-100 aspect-square">
                     <img
-                        src="{{ $images[0] ?? '/flower.png' }}"
+                        src="{{ $mainImage }}"
                         alt="{{ $product->name }}"
                         class="w-full h-full object-cover"
                     />
@@ -46,11 +43,11 @@
                     </div>
                 </div>
 
-                @if(count($images) > 1)
+                @if(count($gallery) > 1)
                     <div class="grid grid-cols-4 gap-4">
-                        @foreach($images as $img)
+                        @foreach($gallery as $thumb)
                             <div class="relative aspect-square rounded-xl overflow-hidden border-2 border-gray-200 hover:border-green-400 transition-colors cursor-pointer">
-                                <img src="{{ $img }}" alt="{{ $product->name }}" class="w-full h-full object-cover" />
+                                <img src="{{ $thumb }}" alt="{{ $product->name }}" class="w-full h-full object-cover" />
                             </div>
                         @endforeach
                     </div>
@@ -93,7 +90,7 @@
                 {{-- Quantity + Add to cart --}}
                 <form
                     method="POST"
-                   action="{{ route('cart.add', $product) }}"
+                    action="{{ route('cart.add', $product) }}"
                     class="space-y-6"
                 >
                     @csrf
@@ -127,7 +124,7 @@
                             {{ $stock > 0 ? 'Add to Cart' : 'Out of Stock' }}
                         </button>
 
-                        {{-- Wishlist button --}}
+                        {{-- Wishlist button placeholder --}}
                         <button
                             type="button"
                             class="py-4 px-6 rounded-xl flex items-center justify-center gap-2 font-bold text-lg border-2 bg-white text-gray-700 border-gray-300 hover:border-green-400 hover:bg-green-50 transition-all hover:scale-105"
@@ -161,18 +158,17 @@
                 <h2 class="text-3xl font-bold text-gray-800 mb-8">Related Products</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     @foreach($relatedProducts as $related)
+                        @php
+                            $relImage = $related->main_image_url;
+                        @endphp
+
                         <a
                             href="{{ route('products.show', $related->slug) }}"
                             class="bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border-2 border-gray-100 hover:border-green-400 group"
                         >
                             <div class="relative h-48 overflow-hidden bg-gray-100">
-                                @php
-                                    $relatedImages = (!empty($related->images) && is_array($related->images)) 
-                                        ? $related->images 
-                                        : ['/flower.png'];
-                                @endphp
                                 <img
-                                    src="{{ $relatedImages[0] ?? '/flower.png' }}"
+                                    src="{{ $relImage }}"
                                     alt="{{ $related->name }}"
                                     class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                                 />

@@ -431,7 +431,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script> -->
-<!-- <header class="fixed w-full z-50 transition-all duration-300 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-lg">
+<header class="fixed w-full z-50 transition-all duration-300 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-lg">
     <div class="container mx-auto px-4 lg:px-8">
         <div class="flex items-center justify-between h-16 sm:h-20">
 
@@ -861,8 +861,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
-</script> -->
-@php
+</script>
+<!-- @php
     $user      = auth()->user();
     $isAuthed  = (bool) $user;
     $current   = url()->current();
@@ -1241,4 +1241,4 @@ document.addEventListener('DOMContentLoaded', function() {
         link.addEventListener('click', closeMobileMenu);
     });
 });
-</script>
+</script> -->

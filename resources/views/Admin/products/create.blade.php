@@ -17,7 +17,8 @@
     </div>
 
     <div class="bg-white rounded-lg shadow overflow-hidden">
-        <form method="POST" action="{{ route('admin.products.store') }}">
+        {{-- ⬇️ important for file upload --}}
+        <form method="POST" action="{{ route('admin.products.store') }}" enctype="multipart/form-data">
             @csrf
 
             <div class="p-6 space-y-6">
@@ -43,19 +44,19 @@
                             <label class="block text-sm font-medium text-gray-700">
                                 Category *
                             </label>
-                           <select
-    name="category"
-    required
-    class="mt-1 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
->
-    <option value="">Select a category</option>
-    @foreach($categories as $cat)
-        <option value="{{ $cat->slug }}" {{ old('category') == $cat->slug ? 'selected' : '' }}>
-            {{ $cat->name }}
-        </option>
-    @endforeach
-</select>
-@error('category') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
+                            <select
+                                name="category"
+                                required
+                                class="mt-1 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
+                            >
+                                <option value="">Select a category</option>
+                                @foreach($categories as $cat)
+                                    <option value="{{ $cat->slug }}" {{ old('category') == $cat->slug ? 'selected' : '' }}>
+                                        {{ $cat->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('category') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
                         </div>
 
                         <div>
@@ -128,27 +129,28 @@
                     <h2 class="text-lg font-medium text-gray-900 mb-2">Product Images</h2>
 
                     <label class="block text-sm font-medium text-gray-700">
-                        Main Image URL
+                        Main Image
                     </label>
                     <input
-                        type="text"
+                        type="file"
                         name="image"
-                        value="{{ old('image') }}"
+                        accept="image/*"
                         class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 mb-3"
-                        placeholder="https://..."
                     >
                     @error('image') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
 
                     <label class="block text-sm font-medium text-gray-700">
-                        Gallery Images (one URL per line)
+                        Gallery Images (you can select multiple)
                     </label>
-                    <textarea
-                        name="gallery"
-                        rows="3"
+                    <input
+                        type="file"
+                        name="gallery[]"
+                        accept="image/*"
+                        multiple
                         class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
-                        placeholder="https://image1.jpg&#10;https://image2.jpg"
-                    >{{ old('gallery') }}</textarea>
+                    >
                     @error('gallery') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
+                    @error('gallery.*') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
                 </div>
             </div>
 

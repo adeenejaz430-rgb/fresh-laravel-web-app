@@ -17,7 +17,8 @@
     </div>
 
     <div class="bg-white rounded-lg shadow overflow-hidden">
-        <form method="POST" action="{{ route('admin.products.update', $product) }}">
+        {{-- ⬇️ important for file upload --}}
+        <form method="POST" action="{{ route('admin.products.update', $product) }}" enctype="multipart/form-data">
             @csrf
             @method('PUT')
 
@@ -44,22 +45,22 @@
                             <label class="block text-sm font-medium text-gray-700">
                                 Category *
                             </label>
-                           <select
-    name="category"
-    required
-    class="mt-1 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
->
-    <option value="">Select a category</option>
-    @foreach($categories as $cat)
-        <option
-            value="{{ $cat->slug }}"
-            {{ (old('category', $product->category) == $cat->slug) ? 'selected' : '' }}
-        >
-            {{ $cat->name }}
-        </option>
-    @endforeach
-</select>
-@error('category') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
+                            <select
+                                name="category"
+                                required
+                                class="mt-1 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
+                            >
+                                <option value="">Select a category</option>
+                                @foreach($categories as $cat)
+                                    <option
+                                        value="{{ $cat->slug }}"
+                                        {{ (old('category', $product->category) == $cat->slug) ? 'selected' : '' }}
+                                    >
+                                        {{ $cat->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('category') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
                         </div>
 
                         <div>
@@ -135,29 +136,66 @@
                 <div>
                     <h2 class="text-lg font-medium text-gray-900 mb-4">Images</h2>
 
+                    {{-- Current main image --}}
+                    @if($product->image)
+                        <div class="mb-3">
+                            <p class="text-sm text-gray-700 mb-1">Current Main Image:</p>
+                            <img
+                                src="{{ asset('storage/'.$product->image) }}"
+                                alt="Current main image"
+                                class="h-24 rounded border"
+                            >
+                        </div>
+                    @endif
+
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700">
-                            Main Image URL
+                            Replace Main Image (optional)
                         </label>
                         <input
-                            type="text"
+                            type="file"
                             name="image"
-                            value="{{ old('image', $product->image) }}"
+                            accept="image/*"
                             class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
                         >
+                        <p class="text-xs text-gray-500 mt-1">
+                            Leave empty to keep current image.
+                        </p>
                         @error('image') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
                     </div>
 
+                    {{-- Current gallery --}}
+                    @if(is_array($product->images) && count($product->images))
+                        <div class="mb-3">
+                            <p class="text-sm text-gray-700 mb-1">Current Gallery Images:</p>
+                            <div class="flex flex-wrap gap-2">
+                                @foreach($product->images as $img)
+                                    <img
+                                        src="{{ asset('storage/'.$img) }}"
+                                        alt="Gallery image"
+                                        class="h-16 w-16 object-cover rounded border"
+                                    >
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
                     <div>
                         <label class="block text-sm font-medium text-gray-700">
-                            Gallery Images (one URL per line)
+                            Replace Gallery Images (optional)
                         </label>
-                        <textarea
-                            name="gallery"
-                            rows="3"
+                        <input
+                            type="file"
+                            name="gallery[]"
+                            accept="image/*"
+                            multiple
                             class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3"
-                        >{{ old('gallery', $gallery) }}</textarea>
+                        >
+                        <p class="text-xs text-gray-500 mt-1">
+                            Leave empty to keep current gallery.
+                        </p>
                         @error('gallery') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
+                        @error('gallery.*') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
                     </div>
                 </div>
             </div>

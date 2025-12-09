@@ -51,4 +51,49 @@ class Product extends Model
                     ->withPivot('quantity')
                     ->withTimestamps();
     }
+      
+    public function getMainImageUrlAttribute()
+    {
+        $images = $this->images ?? [];
+
+        // If somehow stored as JSON string, decode it
+        if (!is_array($images)) {
+            $decoded = json_decode($images, true);
+            $images = is_array($decoded) ? $decoded : [];
+        }
+
+        if (!empty($images)) {
+            $path = $images[0];
+        } elseif (!empty($this->image)) {
+            $path = $this->image;
+        } else {
+            return asset('/flower.png'); // fallback
+        }
+
+        // Always turn storage path into public URL
+        return asset('storage/' . ltrim($path, '/'));
+    }
+
+    /**
+     * ✅ Gallery URLs for detail page thumbnails.
+     */
+    public function getGalleryUrlsAttribute()
+    {
+        $images = $this->images ?? [];
+
+        if (!is_array($images)) {
+            $decoded = json_decode($images, true);
+            $images = is_array($decoded) ? $decoded : [];
+        }
+
+        if (empty($images) && !empty($this->image)) {
+            $images = [$this->image];
+        }
+
+        return collect($images)
+            ->filter()
+            ->map(fn($p) => asset('storage/' . ltrim($p, '/')))
+            ->values()
+            ->all();
+    }
 }

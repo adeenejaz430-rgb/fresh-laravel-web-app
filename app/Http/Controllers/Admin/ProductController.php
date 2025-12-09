@@ -7,34 +7,34 @@ use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
 {
-  public function index(Request $request)
-{
-    $search   = $request->get('q');
-    $category = $request->get('category');
+    public function index(Request $request)
+    {
+        $search   = $request->get('q');
+        $category = $request->get('category');
 
-    // 👇 Change 'category' to 'categoryRelation'
-    $query = Product::query()->with('categoryRelation');
+        $query = Product::query()->with('categoryRelation');
 
-    if ($search) {
-        $query->where(function ($q) use ($search) {
-            $q->where('name', 'like', "%{$search}%")
-              ->orWhere('slug', 'like', "%{$search}%")
-              ->orWhere('id', 'like', "%{$search}%");
-        });
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('slug', 'like', "%{$search}%")
+                  ->orWhere('id', 'like', "%{$search}%");
+            });
+        }
+
+        if ($category) {
+            $query->where('category', $category);
+        }
+
+        $products   = $query->latest()->paginate(15)->withQueryString();
+        $categories = Category::orderBy('name')->get();
+
+        return view('admin.products.index', compact('products', 'categories', 'search', 'category'));
     }
-
-    if ($category) {
-        $query->where('category', $category);
-    }
-
-    $products   = $query->latest()->paginate(15)->withQueryString();
-    $categories = Category::orderBy('name')->get();
-
-    return view('admin.products.index', compact('products', 'categories', 'search', 'category'));
-}
 
     public function create()
     {
@@ -47,36 +47,29 @@ class ProductController extends Controller
     {
         $data = $request->validate([
             'name'        => ['required', 'string', 'max:255'],
-            // category slug, not id
             'category'    => ['required', 'string', 'exists:categories,slug'],
             'price'       => ['required', 'numeric', 'min:0'],
             'quantity'    => ['required', 'integer', 'min:0'],
             'description' => ['required', 'string'],
             'featured'    => ['nullable', 'boolean'],
-            // optional main image URL (only if you actually use it in DB & fillable)
-            'image'       => ['nullable', 'string', 'max:1000'],
-            // one URL per line for gallery
-            'gallery'     => ['nullable', 'string'],
+            // ✅ Single image only
+            'image'       => ['nullable', 'image', 'max:4096'], // ~4MB
         ]);
 
         $data['slug']     = Str::slug($data['name']);
         $data['featured'] = $request->boolean('featured');
 
-        // Convert gallery textarea (one URL per line) into array
-        $images = [];
-        if (!empty($data['gallery'])) {
-            $images = collect(preg_split("/\r\n|\n|\r/", $data['gallery']))
-                ->filter()
-                ->values()
-                ->all();
+        // ✅ Handle single image upload
+        if ($request->hasFile('image')) {
+            $data['image'] = $request->file('image')->store('products', 'public');
+        } else {
+            $data['image'] = null;
         }
-        unset($data['gallery']);
 
-        // Product model has `casts['images' => 'array']`
-        $data['images'] = $images;
+        // ✅ Set images array with single image for backward compatibility
+        $data['images'] = $data['image'] ? [$data['image']] : [];
 
-        // If you want to use a separate `image` column, make sure it's in Product::$fillable
-
+        // Create product
         $product = Product::create($data);
 
         return redirect()
@@ -88,10 +81,7 @@ class ProductController extends Controller
     {
         $categories = Category::orderBy('name')->get();
 
-        // $product->images is already cast to array
-        $gallery = collect($product->images ?? [])->join("\n");
-
-        return view('admin.products.edit', compact('product', 'categories', 'gallery'));
+        return view('admin.products.edit', compact('product', 'categories'));
     }
 
     public function update(Request $request, Product $product)
@@ -103,23 +93,29 @@ class ProductController extends Controller
             'quantity'    => ['required', 'integer', 'min:0'],
             'description' => ['required', 'string'],
             'featured'    => ['nullable', 'boolean'],
-            'image'       => ['nullable', 'string', 'max:1000'],
-            'gallery'     => ['nullable', 'string'],
+            // ✅ Single image only
+            'image'       => ['nullable', 'image', 'max:4096'],
         ]);
 
         $data['slug']     = Str::slug($data['name']);
         $data['featured'] = $request->boolean('featured');
 
-        $images = [];
-        if (!empty($data['gallery'])) {
-            $images = collect(preg_split("/\r\n|\n|\r/", $data['gallery']))
-                ->filter()
-                ->values()
-                ->all();
-        }
-        unset($data['gallery']);
+        // ✅ Handle single image upload
+        if ($request->hasFile('image')) {
+            // Delete old image if exists
+            if ($product->image) {
+                Storage::disk('public')->delete($product->image);
+            }
 
-        $data['images'] = $images;
+            $data['image'] = $request->file('image')->store('products', 'public');
+            
+            // ✅ Update images array with new single image
+            $data['images'] = [$data['image']];
+        } else {
+            // Don't overwrite with null if not uploaded
+            unset($data['image']);
+            unset($data['images']);
+        }
 
         $product->update($data);
 
@@ -130,6 +126,11 @@ class ProductController extends Controller
 
     public function destroy(Product $product)
     {
+        // Delete image file if exists
+        if ($product->image) {
+            Storage::disk('public')->delete($product->image);
+        }
+
         $product->delete();
 
         return redirect()
