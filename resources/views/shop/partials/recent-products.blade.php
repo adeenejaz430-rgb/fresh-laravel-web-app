@@ -15,18 +15,18 @@
             @foreach($recentProducts as $product)
                 @php
                     $stockQty = (int)($product->quantity ?? 0);
-                    $img = $product->images[0] ?? $product->image ?? '/images/placeholder.jpg';
+                    // Use the accessor that properly converts storage path to URL
+                    $img = $product->main_image_url;
                 @endphp
-                <div class="bg-white border-2 border-green-200 rounded-2xl overflow-hidden hover:shadow-xl transition-shadow duration-300 flex flex-col">
+                <a href="{{ route('products.show', $product->slug) }}" class="bg-white border-2 border-green-200 rounded-2xl overflow-hidden hover:shadow-xl transition-shadow duration-300 flex flex-col cursor-pointer group block">
                     {{-- Image --}}
                     <div class="relative h-64 bg-gray-50 overflow-hidden">
-                        <a href="{{ route('products.show', $product->slug) }}">
-                            <img
-                                src="{{ $img }}"
-                                alt="{{ $product->name }}"
-                                class="w-full h-full object-cover"
-                            >
-                        </a>
+                        <img
+                            src="{{ $img }}"
+                            alt="{{ $product->name }}"
+                            class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                            onerror="this.onerror=null;this.src='{{ asset('/flower.png') }}';"
+                        >
                         <div class="absolute top-4 right-4">
                             <span class="bg-green-500 text-white text-xs font-semibold px-4 py-2 rounded-full">
                                 {{ $product->category ?? 'Product' }}
@@ -36,7 +36,7 @@
 
                     {{-- Content --}}
                     <div class="p-6 flex-1 flex flex-col">
-                        <h3 class="text-xl font-semibold text-gray-800 mb-2">
+                        <h3 class="text-xl font-semibold text-gray-800 mb-2 group-hover:text-green-600 transition-colors">
                             {{ $product->name }}
                         </h3>
                         <p class="text-gray-500 text-sm mb-4 flex-1">
@@ -50,6 +50,7 @@
                             <form
                                 method="POST"
                                 action="{{ route('cart.add', $product->id) }}"
+                                onclick="event.stopPropagation();"
                             >
                                 @csrf
                                 <button
@@ -63,7 +64,7 @@
                             </form>
                         </div>
                     </div>
-                </div>
+                </a>
             @endforeach
         </div>
     </div>

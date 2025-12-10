@@ -30,7 +30,7 @@
     
     $shipping = $subtotal >= 50 ? 0 : 10;
     $tax = $subtotal * 0.10;
-    $total = $subtotal + $shipping + $tax;
+    $total = $subtotal ;
 @endphp
 
 <div id="cartSidebar" class="fixed inset-0 z-50 hidden">
@@ -215,12 +215,162 @@ body.cart-open {
 </style>
 
 <script>
+// Auth status for JavaScript
+const isAuthenticated = {{ auth()->check() ? 'true' : 'false' }};
+
+// Function to refresh cart sidebar content
+function refreshCartSidebar() {
+    fetch('/cart/items', {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        },
+        credentials: 'same-origin'
+    })
+    .then(response => response.json())
+    .then(data => {
+        const cart = data.cart || [];
+        const cartCount = data.count || 0;
+        const subtotal = data.subtotal || 0;
+        const shipping = data.shipping || 0;
+        const tax = data.tax || 0;
+        const total = data.total || 0;
+        
+        // Update cart count in sidebar header
+        const cartItemCountEl = document.getElementById('cartItemCount');
+        if (cartItemCountEl) {
+            cartItemCountEl.textContent = cartCount;
+        }
+        
+        const container = document.getElementById('cartItemsContainer');
+        const footer = document.getElementById('cartFooter');
+        
+        if (cartCount === 0) {
+            // Show empty state
+            showEmptyCartState();
+        } else {
+            // Build cart items HTML
+            let itemsHTML = '<div class="space-y-4" id="cartItemsList">';
+            
+            cart.forEach(item => {
+                const itemTotal = (item.price * item.qty).toFixed(2);
+                itemsHTML += `
+                    <div class="flex gap-4 pb-4 border-b border-gray-100 cart-item" data-item-id="${item.id}" data-price="${item.price}" data-qty="${item.qty}">
+                        <a href="/products/${item.slug}" onclick="closeCartSidebar()" class="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 hover:opacity-80 transition-opacity">
+                            <img src="${item.image}" alt="${item.name}" class="w-full h-full object-cover">
+                        </a>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex justify-between items-start mb-1">
+                                <a href="/products/${item.slug}" onclick="closeCartSidebar()" class="font-semibold text-gray-900 hover:text-green-600 transition-colors text-sm line-clamp-2">
+                                    ${item.name}
+                                </a>
+                                ${isAuthenticated ? 
+                                    `<button onclick="removeFromCart(${item.id})" class="text-gray-400 hover:text-red-500 transition-colors ml-2 remove-item-btn" aria-label="Remove item">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                        </svg>
+                                    </button>` : 
+                                    `<button onclick="removeFromCartSession(${item.id})" class="text-gray-400 hover:text-red-500 transition-colors ml-2 remove-item-btn" aria-label="Remove item">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                        </svg>
+                                    </button>`
+                                }
+                            </div>
+                            <p class="text-sm text-gray-500 mb-3">$${item.price.toFixed(2)}</p>
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center border border-gray-200 rounded-lg">
+                                    <button onclick="updateCartQuantity('${item.id}', -1)" class="px-2.5 py-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors ${item.qty <= 1 ? 'opacity-50 cursor-not-allowed' : ''}" ${item.qty <= 1 ? 'disabled' : ''}>
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                                        </svg>
+                                    </button>
+                                    <span class="px-3 py-1 text-sm font-medium text-gray-700 min-w-[2rem] text-center quantity-display">${item.qty}</span>
+                                    <button onclick="updateCartQuantity('${item.id}', 1)" class="px-2.5 py-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <p class="font-bold text-gray-900 item-total">$${itemTotal}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            itemsHTML += '</div>';
+            container.innerHTML = itemsHTML;
+            
+            // Update or create footer
+            if (!footer) {
+                const footerHTML = `
+                    <div class="border-t border-gray-200 p-4 bg-gray-50" id="cartFooter">
+                        <div class="space-y-2 mb-4">
+                            <div class="flex justify-between text-sm text-gray-600">
+                                <span>Subtotal</span>
+                                <span class="font-semibold" id="cartSubtotal">$${subtotal.toFixed(2)}</span>
+                            </div>
+                            <div class="flex justify-between text-sm text-gray-600">
+                                <span>Shipping</span>
+                                <span class="font-semibold" id="cartShipping">
+                                    ${shipping === 0 ? '<span class="text-green-600">FREE</span>' : '$' + shipping.toFixed(2)}
+                                </span>
+                            </div>
+                            <div class="flex justify-between text-sm text-gray-600">
+                                <span>Tax (10%)</span>
+                                <span class="font-semibold" id="cartTax">$${tax.toFixed(2)}</span>
+                            </div>
+                        </div>
+                        <div class="flex justify-between mb-6 text-lg font-bold text-gray-900 pt-3 border-t border-gray-200">
+                            <span>Total</span>
+                            <span id="cartTotal">$${total.toFixed(2)}</span>
+                        </div>
+                        <a href="/checkout" onclick="closeCartSidebar()" class="block w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white py-3 rounded-lg font-semibold text-center transition-all shadow-md hover:shadow-lg mb-2">
+                            <span class="inline-flex items-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+                                </svg>
+                                Proceed to Checkout
+                            </span>
+                        </a>
+                        <button onclick="closeCartSidebar()" class="w-full border-2 border-gray-300 bg-white hover:bg-gray-50 text-gray-800 py-2.5 rounded-lg font-semibold transition-colors">
+                            Continue Shopping
+                        </button>
+                    </div>
+                `;
+                const panel = document.getElementById('cartPanel');
+                panel.insertAdjacentHTML('beforeend', footerHTML);
+            } else {
+                document.getElementById('cartSubtotal').textContent = '$' + subtotal.toFixed(2);
+                const shippingEl = document.getElementById('cartShipping');
+                if (shipping === 0) {
+                    shippingEl.innerHTML = '<span class="text-green-600">FREE</span>';
+                } else {
+                    shippingEl.textContent = '$' + shipping.toFixed(2);
+                }
+                document.getElementById('cartTax').textContent = '$' + tax.toFixed(2);
+                document.getElementById('cartTotal').textContent = '$' + total.toFixed(2);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error refreshing cart:', error);
+    });
+}
+
 // Cart Sidebar Functions
 function openCartSidebar() {
     const sidebar = document.getElementById('cartSidebar');
     
     if (!sidebar) {
         console.error('Cart sidebar element not found');
+        return;
+    }
+    
+    // Refresh cart content before opening (if sidebar is already open, refresh it)
+    if (sidebar.classList.contains('show')) {
+        refreshCartSidebar();
         return;
     }
     
@@ -570,4 +720,5 @@ window.closeCartSidebar = closeCartSidebar;
 window.updateCartQuantity = updateCartQuantity;
 window.removeFromCart = removeFromCart;
 window.removeFromCartSession = removeFromCartSession;
+window.refreshCartSidebar = refreshCartSidebar;
 </script>

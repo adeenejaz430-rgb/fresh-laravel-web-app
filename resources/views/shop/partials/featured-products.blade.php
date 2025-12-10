@@ -137,8 +137,8 @@
             @foreach($featuredProducts as $product)
                 @php
                     $stockQty = (int)($product->quantity ?? 0);
-                    $images = is_array($product->images) ? $product->images : [];
-                    $firstImage = $images[0] ?? '/images/placeholder.jpg';
+                    // Use the accessor that properly converts storage path to URL
+                    $firstImage = $product->main_image_url;
                     
                     $isWishlisted = false;
                     if(auth()->check()) {
@@ -146,18 +146,18 @@
                     }
                 @endphp
 
-                <div class="product-card bg-white border-2 border-gray-100 rounded-2xl overflow-hidden hover:shadow-2xl hover:border-green-400 flex flex-col group" data-category="{{ $product->categoryRelation->name ?? 'Uncategorized' }}">
+                <a href="{{ route('products.show', $product->slug) }}" class="product-card bg-white border-2 border-gray-100 rounded-2xl overflow-hidden hover:shadow-2xl hover:border-green-400 flex flex-col group cursor-pointer block" data-category="{{ $product->categoryRelation->name ?? 'Uncategorized' }}">
                     {{-- Image Container --}}
                     <div class="relative h-56 overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
                         {{-- Category Badge --}}
-                        <div class="absolute top-4 right-4 z-10">
+                        <div class="absolute top-4 right-4 z-10" onclick="event.stopPropagation();">
                             <span class="bg-green-500 text-white px-4 py-1.5 rounded-full text-xs font-semibold shadow-lg backdrop-blur-sm bg-opacity-90">
                                 {{ $product->categoryRelation->name ?? 'Uncategorized' }}
                             </span>
                         </div>
 
                         {{-- Featured Badge --}}
-                        <div class="absolute top-4 left-4 z-10">
+                        <div class="absolute top-4 left-4 z-10" onclick="event.stopPropagation();">
                             <span class="bg-gradient-to-r from-yellow-400 to-orange-400 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-lg flex items-center gap-1">
                                 <span>⭐</span>
                                 <span>Featured</span>
@@ -165,14 +165,12 @@
                         </div>
 
                         {{-- Product Image --}}
-                        <a href="{{ route('products.show', $product->slug) }}">
-                            <img
-                                src="{{ $firstImage }}"
-                                alt="{{ $product->name }}"
-                                class="w-full h-full object-cover cursor-pointer group-hover:scale-110 transition-transform duration-500"
-                                onerror="this.onerror=null;this.src='/images/placeholder.jpg';"
-                            />
-                        </a>
+                        <img
+                            src="{{ $firstImage }}"
+                            alt="{{ $product->name }}"
+                            class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                            onerror="this.onerror=null;this.src='{{ asset('/flower.png') }}';"
+                        />
 
                         {{-- Hover Overlay --}}
                         <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -180,11 +178,9 @@
 
                     {{-- Content --}}
                     <div class="p-5 flex-1 flex flex-col">
-                        <a href="{{ route('products.show', $product->slug) }}">
-                            <h3 class="text-xl font-bold text-gray-800 mb-2 hover:text-green-600 transition-colors cursor-pointer line-clamp-2 min-h-[3.5rem]">
-                                {{ $product->name }}
-                            </h3>
-                        </a>
+                        <h3 class="text-xl font-bold text-gray-800 mb-2 group-hover:text-green-600 transition-colors line-clamp-2 min-h-[3.5rem]">
+                            {{ $product->name }}
+                        </h3>
 
                         <p class="text-gray-500 text-sm mb-4 line-clamp-2 flex-1 min-h-[2.5rem]">
                             {{ $product->description ?? 'Premium quality product with excellent features.' }}
@@ -211,7 +207,7 @@
                                 </span>
                             </div>
 
-                            <form class="add-to-cart-form" data-product-id="{{ $product->id }}" data-product-name="{{ $product->name }}">
+                            <form class="add-to-cart-form" data-product-id="{{ $product->id }}" data-product-name="{{ $product->name }}" onclick="event.stopPropagation();">
                                 @csrf
                                 <input type="hidden" name="quantity" value="1">
                                 <button
@@ -231,7 +227,7 @@
                             </form>
                         </div>
                     </div>
-                </div>
+                </a>
             @endforeach
         </div>
 
@@ -248,11 +244,22 @@
 </section>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const categoryTabs = document.querySelectorAll('.category-tab');
-    const productCards = document.querySelectorAll('.product-card');
-    const productsGrid = document.getElementById('productsGrid');
-    const emptyState = document.getElementById('emptyState');
+(function() {
+    'use strict';
+    
+    // Ensure this runs after DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initFeaturedProducts);
+    } else {
+        // DOM already loaded
+        initFeaturedProducts();
+    }
+    
+    function initFeaturedProducts() {
+        const categoryTabs = document.querySelectorAll('.category-tab');
+        const productCards = document.querySelectorAll('.product-card');
+        const productsGrid = document.getElementById('productsGrid');
+        const emptyState = document.getElementById('emptyState');
 
     // Category filter function
     window.filterByCategory = function(categoryName) {
@@ -298,93 +305,146 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 300);
     };
 
-    // Add to Cart with AJAX
-    const addToCartForms = document.querySelectorAll('.add-to-cart-form');
-    
-    addToCartForms.forEach(form => {
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const button = this.querySelector('button[type="submit"]');
-            const productId = this.dataset.productId;
-            const productName = this.dataset.productName;
-            const originalContent = button.innerHTML;
-            
-            // Check if user is authenticated
-            @guest
-                showToast('Please sign in to add items to cart', 'info');
-                setTimeout(() => {
-                    window.location.href = '{{ route("login") }}';
-                }, 1500);
+    // Add to Cart with AJAX - Initialize function
+    function initializeAddToCart() {
+        const addToCartForms = document.querySelectorAll('.add-to-cart-form');
+        
+        addToCartForms.forEach(form => {
+            // Skip if already has listener
+            if (form.dataset.listenerAttached === 'true') {
                 return;
-            @endguest
+            }
+            form.dataset.listenerAttached = 'true';
             
-            // Disable button and show loading
-            button.disabled = true;
-            button.innerHTML = `
-                <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span>Adding...</span>
-            `;
-            
-            // Make AJAX request
-            fetch(`/cart/${productId}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({
-                    quantity: 1
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const button = this.querySelector('button[type="submit"]');
+                if (!button) return;
+                
+                const productId = this.dataset.productId;
+                const productName = this.dataset.productName;
+                
+                if (!productId) {
+                    console.error('Product ID not found');
+                    return;
+                }
+                
+                const originalContent = button.innerHTML;
+                
+                // Get CSRF token
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || 
+                                 document.querySelector('input[name="_token"]')?.value;
+                
+                if (!csrfToken) {
+                    console.error('CSRF token not found');
+                    showToast('Security token missing. Please refresh the page.', 'error');
+                    return;
+                }
+                
+                // Check if user is authenticated (server-side check will handle this, but we can show a message)
+                @guest
+                    showToast('Please sign in to add items to cart', 'info');
+                    setTimeout(() => {
+                        window.location.href = '{{ route("login") }}';
+                    }, 1500);
+                    return;
+                @endguest
+                
+                // Disable button and show loading
+                button.disabled = true;
+                button.innerHTML = `
+                    <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Adding...</span>
+                `;
+                
+                // Make AJAX request
+                fetch(`/cart/${productId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        quantity: 1
+                    }),
+                    credentials: 'same-origin'
                 })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Show success feedback
-                    button.innerHTML = `
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
-                        <span>Added!</span>
-                    `;
-                    
-                    // Update cart count
-                    updateCartCount();
-                    
-                    // Show toast notification
-                    showToast(`${productName} added to cart!`, 'success');
-                    
-                    // Open cart sidebar after delay
-                    setTimeout(() => {
-                        if (typeof openCartSidebar === 'function') {
-                            openCartSidebar();
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        // Show success feedback
+                        button.innerHTML = `
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <span>Added!</span>
+                        `;
+                        
+                        // Update cart count
+                        updateCartCount();
+                        
+                        // Show toast notification
+                        showToast(`${productName} added to cart!`, 'success');
+                        
+                        // Refresh cart sidebar if it exists
+                        if (typeof refreshCartSidebar === 'function') {
+                            refreshCartSidebar();
                         }
-                    }, 500);
-                    
-                    // Reset button after 2 seconds
-                    setTimeout(() => {
+                        
+                        // Open cart sidebar after delay
+                        setTimeout(() => {
+                            if (typeof openCartSidebar === 'function') {
+                                openCartSidebar();
+                            }
+                        }, 500);
+                        
+                        // Reset button after 2 seconds
+                        setTimeout(() => {
+                            button.innerHTML = originalContent;
+                            button.disabled = false;
+                        }, 2000);
+                    } else {
+                        showToast(data.message || 'Failed to add product', 'error');
                         button.innerHTML = originalContent;
                         button.disabled = false;
-                    }, 2000);
-                } else {
-                    showToast(data.message || 'Failed to add product', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Add to cart error:', error);
+                    showToast('An error occurred. Please try again.', 'error');
                     button.innerHTML = originalContent;
                     button.disabled = false;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showToast('An error occurred. Please try again.', 'error');
-                button.innerHTML = originalContent;
-                button.disabled = false;
+                });
             });
         });
-    });
+    }
+    
+    // Initialize on page load
+    initializeAddToCart();
+    
+    // Re-initialize after category filtering (in case DOM changes)
+    const originalFilterByCategory = window.filterByCategory;
+    window.filterByCategory = function(categoryName) {
+        if (originalFilterByCategory) {
+            originalFilterByCategory(categoryName);
+        }
+        // Re-initialize add to cart after filtering
+        setTimeout(() => {
+            initializeAddToCart();
+        }, 350);
+    };
 
     // Update cart count function
     function updateCartCount() {
@@ -450,6 +510,7 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => toast.remove(), 300);
         }, 3000);
     }
-});
+    } // End of initFeaturedProducts function
+})(); // End of IIFE
 </script>
 @endif

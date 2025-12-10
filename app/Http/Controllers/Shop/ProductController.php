@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Shop;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\Category;
+use App\Models\Wishlist;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
@@ -105,11 +106,20 @@ class ProductController extends Controller
         ->get();
 
     $categories = Category::orderBy('name')->get();
+    
+    // Check if product is in wishlist for authenticated user
+    $isWishlisted = false;
+    if (auth()->check()) {
+        $isWishlisted = Wishlist::where('user_id', auth()->id())
+            ->where('product_id', $product->id)
+            ->exists();
+    }
 
     return view('shop.products.show', [
         'product'         => $product,
         'relatedProducts' => $relatedProducts,
         'categories'      => $categories,
+        'isWishlisted'    => $isWishlisted,
     ]);
 }
 

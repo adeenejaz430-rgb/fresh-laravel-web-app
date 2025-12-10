@@ -53,4 +53,13 @@ class User extends Authenticatable
                     ->withPivot('quantity')
                     ->withTimestamps();
     }
+
+    /**
+     * Orders: one-to-many relationship
+     * A user can have many orders
+     */
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
 }

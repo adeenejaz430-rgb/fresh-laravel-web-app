@@ -52,22 +52,45 @@ class ProductController extends Controller
             'quantity'    => ['required', 'integer', 'min:0'],
             'description' => ['required', 'string'],
             'featured'    => ['nullable', 'boolean'],
-            // ✅ Single image only
-            'image'       => ['nullable', 'image', 'max:4096'], // ~4MB
+            'image'       => ['nullable', 'image', 'max:4096'], // Main image
+            'gallery'     => ['nullable', 'array'],
+            'gallery.*'   => ['image', 'max:4096'], // Gallery images
         ]);
 
-        $data['slug']     = Str::slug($data['name']);
+        // Generate unique slug to prevent duplicate slug errors
+        $baseSlug = Str::slug($data['name']);
+        $slug = $baseSlug;
+        $counter = 1;
+        
+        // Check if slug exists and make it unique
+        while (Product::where('slug', $slug)->exists()) {
+            $slug = $baseSlug . '-' . $counter;
+            $counter++;
+        }
+        
+        $data['slug'] = $slug;
         $data['featured'] = $request->boolean('featured');
 
-        // ✅ Handle single image upload
+        // Handle main image upload
+        $imagePaths = [];
         if ($request->hasFile('image')) {
-            $data['image'] = $request->file('image')->store('products', 'public');
+            $imagePath = $request->file('image')->store('products', 'public');
+            $data['image'] = $imagePath;
+            $imagePaths[] = $imagePath; // Add main image to gallery
         } else {
             $data['image'] = null;
         }
 
-        // ✅ Set images array with single image for backward compatibility
-        $data['images'] = $data['image'] ? [$data['image']] : [];
+        // Handle gallery images upload
+        if ($request->hasFile('gallery')) {
+            foreach ($request->file('gallery') as $galleryFile) {
+                $galleryPath = $galleryFile->store('products', 'public');
+                $imagePaths[] = $galleryPath;
+            }
+        }
+
+        // Set images array (main image + gallery images)
+        $data['images'] = !empty($imagePaths) ? $imagePaths : [];
 
         // Create product
         $product = Product::create($data);
@@ -93,28 +116,83 @@ class ProductController extends Controller
             'quantity'    => ['required', 'integer', 'min:0'],
             'description' => ['required', 'string'],
             'featured'    => ['nullable', 'boolean'],
-            // ✅ Single image only
-            'image'       => ['nullable', 'image', 'max:4096'],
+            'image'       => ['nullable', 'image', 'max:4096'], // Main image
+            'gallery'     => ['nullable', 'array'],
+            'gallery.*'   => ['image', 'max:4096'], // Gallery images
         ]);
 
-        $data['slug']     = Str::slug($data['name']);
+        // Generate unique slug (only if name changed)
+        if ($data['name'] !== $product->name) {
+            $baseSlug = Str::slug($data['name']);
+            $slug = $baseSlug;
+            $counter = 1;
+            
+            // Check if slug exists (excluding current product) and make it unique
+            while (Product::where('slug', $slug)->where('id', '!=', $product->id)->exists()) {
+                $slug = $baseSlug . '-' . $counter;
+                $counter++;
+            }
+            
+            $data['slug'] = $slug;
+        }
+        
         $data['featured'] = $request->boolean('featured');
 
-        // ✅ Handle single image upload
+        // Handle image updates
+        $imagePaths = [];
+        $imagesUpdated = false;
+
+        // Handle main image upload
         if ($request->hasFile('image')) {
-            // Delete old image if exists
+            // Delete old main image if exists
             if ($product->image) {
                 Storage::disk('public')->delete($product->image);
             }
 
-            $data['image'] = $request->file('image')->store('products', 'public');
-            
-            // ✅ Update images array with new single image
-            $data['images'] = [$data['image']];
+            $imagePath = $request->file('image')->store('products', 'public');
+            $data['image'] = $imagePath;
+            $imagePaths[] = $imagePath;
+            $imagesUpdated = true;
         } else {
-            // Don't overwrite with null if not uploaded
-            unset($data['image']);
-            unset($data['images']);
+            // Keep existing main image if it exists
+            if ($product->image) {
+                $imagePaths[] = $product->image;
+            }
+            unset($data['image']); // Don't overwrite with null
+        }
+
+        // Handle gallery images upload
+        if ($request->hasFile('gallery')) {
+            // Delete old gallery images if replacing
+            if ($product->images && is_array($product->images)) {
+                foreach ($product->images as $oldImage) {
+                    // Don't delete if it's the main image
+                    if ($oldImage !== $product->image) {
+                        Storage::disk('public')->delete($oldImage);
+                    }
+                }
+            }
+
+            foreach ($request->file('gallery') as $galleryFile) {
+                $galleryPath = $galleryFile->store('products', 'public');
+                $imagePaths[] = $galleryPath;
+            }
+            $imagesUpdated = true;
+        } else {
+            // Keep existing gallery images (excluding main image which is already added)
+            if ($product->images && is_array($product->images)) {
+                foreach ($product->images as $existingImage) {
+                    // Add gallery images that aren't the main image
+                    if ($existingImage !== $product->image && !in_array($existingImage, $imagePaths)) {
+                        $imagePaths[] = $existingImage;
+                    }
+                }
+            }
+        }
+
+        // Update images array if images were changed
+        if ($imagesUpdated || $request->hasFile('image')) {
+            $data['images'] = array_unique($imagePaths); // Remove duplicates
         }
 
         $product->update($data);

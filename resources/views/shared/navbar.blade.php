@@ -431,9 +431,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script> -->
-<header class="fixed w-full z-50 transition-all duration-300 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-lg">
-    <div class="container mx-auto px-4 lg:px-8">
-        <div class="flex items-center justify-between h-16 sm:h-20">
+<header class="fixed top-0 left-0 right-0 w-full z-50 transition-all duration-300 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-lg" style="height: 80px;">
+    <div class="container mx-auto px-4 lg:px-8 h-full">
+        <div class="flex items-center justify-between h-full">
 
             {{-- LOGO --}}
             <a href="{{ route('shop.home') }}" class="flex items-center z-50 transform hover:scale-105 transition-transform duration-200">
@@ -451,8 +451,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     ['name' => 'Home',     'route' => 'shop.home',      'href' => '/'],
                     ['name' => 'Products', 'route' => 'products.index', 'href' => '/products'],
                     ['name' => 'About',    'route' => null,             'href' => '/about'],
-                    ['name' => 'Blog',     'route' => null,             'href' => '/blog'],
-                    ['name' => 'Contact',  'route' => null,             'href' => '/contact'],
+                    ['name' => 'Blog',     'route' => 'blog.index',     'href' => '/blog'],
+                    ['name' => 'Contact',  'route' => 'contact.index',  'href' => '/contact'],
                 ];
 
                 $categoriesList = $categories ?? [];

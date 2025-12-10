@@ -22,15 +22,44 @@
 
     <div class="container mx-auto px-4 py-12">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
-            {{-- Images --}}
+            {{-- Images with Slider --}}
             <div class="space-y-4">
-                <div class="relative bg-white rounded-3xl overflow-hidden shadow-lg border-2 border-gray-100 aspect-square">
-                    <img
-                        src="{{ $mainImage }}"
-                        alt="{{ $product->name }}"
-                        class="w-full h-full object-cover"
-                    />
-                    <div class="absolute top-6 left-6">
+                <div class="relative bg-white rounded-3xl overflow-hidden shadow-lg border-2 border-gray-100 aspect-square group">
+                    {{-- Main Image Container with Slider --}}
+                    <div class="relative w-full h-full overflow-hidden">
+                        <div id="mainImageContainer" class="relative w-full h-full">
+                            <img
+                                id="mainProductImage"
+                                src="{{ $mainImage }}"
+                                alt="{{ $product->name }}"
+                                class="w-full h-full object-cover transition-all duration-500 ease-in-out"
+                            />
+                        </div>
+                        
+                        {{-- Navigation Arrows (only show if multiple images) --}}
+                        @if(count($gallery) > 1)
+                            <button
+                                id="prevImageBtn"
+                                class="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 p-3 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 transform hover:scale-110"
+                                aria-label="Previous image"
+                            >
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                                </svg>
+                            </button>
+                            <button
+                                id="nextImageBtn"
+                                class="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 p-3 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 transform hover:scale-110"
+                                aria-label="Next image"
+                            >
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                            </button>
+                        @endif
+                    </div>
+                    
+                    <div class="absolute top-6 left-6 z-10">
                         <span class="px-4 py-2 rounded-full text-sm font-bold shadow-lg
                             @if($stock > 5) bg-green-500 text-white
                             @elseif($stock > 0) bg-yellow-400 text-gray-800
@@ -45,9 +74,20 @@
 
                 @if(count($gallery) > 1)
                     <div class="grid grid-cols-4 gap-4">
-                        @foreach($gallery as $thumb)
-                            <div class="relative aspect-square rounded-xl overflow-hidden border-2 border-gray-200 hover:border-green-400 transition-colors cursor-pointer">
-                                <img src="{{ $thumb }}" alt="{{ $product->name }}" class="w-full h-full object-cover" />
+                        @foreach($gallery as $index => $thumb)
+                            <div 
+                                class="thumbnail-image relative aspect-square rounded-xl overflow-hidden border-2 transition-all duration-300 cursor-pointer
+                                    {{ $index === 0 ? 'border-green-500 scale-105 shadow-lg' : 'border-gray-200 hover:border-green-400' }}
+                                "
+                                data-image-index="{{ $index }}"
+                                data-image-src="{{ $thumb }}"
+                            >
+                                <img 
+                                    src="{{ $thumb }}" 
+                                    alt="{{ $product->name }} - Image {{ $index + 1 }}" 
+                                    class="w-full h-full object-cover"
+                                />
+                                <div class="absolute inset-0 bg-black/0 hover:bg-black/10 transition-colors duration-300"></div>
                             </div>
                         @endforeach
                     </div>
@@ -109,7 +149,7 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 gap-4">
                         <button
                             type="submit"
                             @if($stock === 0) disabled @endif
@@ -122,15 +162,6 @@
                             ">
                             <span class="material-symbols-outlined">shopping_cart</span>
                             {{ $stock > 0 ? 'Add to Cart' : 'Out of Stock' }}
-                        </button>
-
-                        {{-- Wishlist button placeholder --}}
-                        <button
-                            type="button"
-                            class="py-4 px-6 rounded-xl flex items-center justify-center gap-2 font-bold text-lg border-2 bg-white text-gray-700 border-gray-300 hover:border-green-400 hover:bg-green-50 transition-all hover:scale-105"
-                        >
-                            <span class="material-symbols-outlined">favorite</span>
-                            Add to Wishlist
                         </button>
                     </div>
                 </form>
@@ -197,4 +228,105 @@
         {{ session('error') }}
     </div>
 @endif
+
+{{-- Image Slider Script --}}
+@if(count($gallery) > 1)
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const mainImage = document.getElementById('mainProductImage');
+    const thumbnails = document.querySelectorAll('.thumbnail-image');
+    const prevBtn = document.getElementById('prevImageBtn');
+    const nextBtn = document.getElementById('nextImageBtn');
+    
+    // Use gallery array which already includes all images
+    const images = @json($gallery);
+    let currentIndex = 0;
+    
+    // Function to update main image with sliding effect
+    function updateMainImage(index, direction = 'next') {
+        if (index < 0 || index >= images.length) return;
+        
+        currentIndex = index;
+        const newImageSrc = images[index];
+        
+        // Create sliding effect
+        mainImage.style.opacity = '0';
+        mainImage.style.transform = direction === 'next' ? 'translateX(20px)' : 'translateX(-20px)';
+        
+        setTimeout(() => {
+            mainImage.src = newImageSrc;
+            mainImage.style.opacity = '1';
+            mainImage.style.transform = 'translateX(0)';
+        }, 250);
+        
+        // Update thumbnail active state
+        thumbnails.forEach((thumb, idx) => {
+            if (idx === index) {
+                thumb.classList.add('border-green-500', 'scale-105', 'shadow-lg');
+                thumb.classList.remove('border-gray-200');
+            } else {
+                thumb.classList.remove('border-green-500', 'scale-105', 'shadow-lg');
+                thumb.classList.add('border-gray-200');
+            }
+        });
+    }
+    
+    // Thumbnail click handler
+    thumbnails.forEach((thumb, index) => {
+        thumb.addEventListener('click', function() {
+            const direction = index > currentIndex ? 'next' : 'prev';
+            updateMainImage(index, direction);
+        });
+    });
+    
+    // Previous button handler
+    if (prevBtn) {
+        prevBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const newIndex = currentIndex > 0 ? currentIndex - 1 : images.length - 1;
+            updateMainImage(newIndex, 'prev');
+        });
+    }
+    
+    // Next button handler
+    if (nextBtn) {
+        nextBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const newIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0;
+            updateMainImage(newIndex, 'next');
+        });
+    }
+    
+    // Keyboard navigation
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowLeft') {
+            const newIndex = currentIndex > 0 ? currentIndex - 1 : images.length - 1;
+            updateMainImage(newIndex, 'prev');
+        } else if (e.key === 'ArrowRight') {
+            const newIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0;
+            updateMainImage(newIndex, 'next');
+        }
+    });
+    
+    // Auto-slide (optional - uncomment if you want auto-sliding)
+    // let autoSlideInterval = setInterval(() => {
+    //     const newIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0;
+    //     updateMainImage(newIndex, 'next');
+    // }, 5000);
+    
+    // Pause auto-slide on hover
+    // const imageContainer = document.querySelector('.relative.aspect-square');
+    // if (imageContainer) {
+    //     imageContainer.addEventListener('mouseenter', () => clearInterval(autoSlideInterval));
+    //     imageContainer.addEventListener('mouseleave', () => {
+    //         autoSlideInterval = setInterval(() => {
+    //             const newIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0;
+    //             updateMainImage(newIndex, 'next');
+    //         }, 5000);
+    //     });
+    // }
+});
+</script>
+@endif
+
 @endsection
