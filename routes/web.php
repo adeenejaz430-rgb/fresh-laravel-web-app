@@ -21,6 +21,7 @@ use App\Http\Controllers\Shop\WishlistController;
 use App\Http\Controllers\Shop\SearchController;
 use App\Http\Controllers\Shop\BlogController;
 use App\Http\Controllers\Shop\ContactController;
+use App\Http\Controllers\Shop\AboutController;
 use App\Http\Controllers\Shop\CategoryController as ShopCategoryController;
 use App\Http\Controllers\Shop\CartController;
 use App\Http\Controllers\UploadController;
@@ -65,6 +66,7 @@ Route::middleware(['auth', 'is_admin'])
         Route::get('/', [AdminDashboardController::class, 'index'])->name('dashboard');
 
         Route::resource('products',   AdminProductController::class);
+        Route::post('products/{product}/remove-image', [AdminProductController::class, 'removeImage'])->name('products.remove-image');
         Route::resource('categories', AdminCategoryController::class);
         Route::resource('orders',     AdminOrderController::class);
         Route::resource('customers',  AdminCustomerController::class);
@@ -81,6 +83,7 @@ Route::get('/products/{product:slug}', [ShopProductController::class, 'show'])->
 Route::get('/search', [SearchController::class, 'index'])->name('search');
 
 Route::get('/blog', [BlogController::class, 'index'])->name('blog.index');
+Route::get('/about', [AboutController::class, 'index'])->name('about.index');
 Route::get('/contact', [ContactController::class, 'index'])->name('contact.index');
 Route::post('/contact', [ContactController::class, 'store'])->name('contact.store');
 

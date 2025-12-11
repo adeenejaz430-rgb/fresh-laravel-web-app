@@ -165,18 +165,62 @@
                     </div>
 
                     {{-- Current gallery --}}
-                    @if(is_array($product->images) && count($product->images))
+                    @php
+                        use Illuminate\Support\Facades\Storage;
+                        $validImages = [];
+                        $brokenImages = [];
+                        if (is_array($product->images)) {
+                            foreach ($product->images as $img) {
+                                if (!empty($img) && Storage::disk('public')->exists($img)) {
+                                    $validImages[] = $img;
+                                } else {
+                                    $brokenImages[] = $img;
+                                }
+                            }
+                        }
+                    @endphp
+                    @if(count($validImages) > 0)
                         <div class="mb-3">
                             <p class="text-sm text-gray-700 mb-1">Current Gallery Images:</p>
                             <div class="flex flex-wrap gap-2">
-                                @foreach($product->images as $img)
-                                    <img
-                                        src="{{ asset('storage/'.$img) }}"
-                                        alt="Gallery image"
-                                        class="h-16 w-16 object-cover rounded border"
-                                    >
+                                @foreach($validImages as $index => $img)
+                                    <div class="relative group">
+                                        <img
+                                            src="{{ asset('storage/'.$img) }}"
+                                            alt="Gallery image"
+                                            class="h-16 w-16 object-cover rounded border"
+                                            onerror="this.style.display='none';"
+                                        >
+                                        <form 
+                                            method="POST" 
+                                            action="{{ route('admin.products.remove-image', $product) }}"
+                                            class="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onsubmit="return confirm('Are you sure you want to remove this image?');"
+                                        >
+                                            @csrf
+                                            <input type="hidden" name="image_path" value="{{ $img }}">
+                                            <button
+                                                type="submit"
+                                                class="bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-lg"
+                                                title="Remove image"
+                                            >
+                                                ×
+                                            </button>
+                                        </form>
+                                    </div>
                                 @endforeach
                             </div>
+                            @if(count($brokenImages) > 0)
+                                <p class="text-xs text-yellow-600 mt-1">
+                                    {{ count($brokenImages) }} broken image(s) will be automatically removed on next update.
+                                </p>
+                            @endif
+                        </div>
+                    @elseif(count($brokenImages) > 0)
+                        <div class="mb-3">
+                            <p class="text-xs text-yellow-600">
+                                All gallery images are broken/missing. They will be automatically removed on next update.
+                            </p>
                         </div>
                     @endif
 
