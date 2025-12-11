@@ -301,11 +301,6 @@
     {{-- RECENT PRODUCTS CAROUSEL --}}
     @includeIf('shop.partials.recent-products')
 
-    {{-- YELLOW HERO SECTION - Moved Below Recent Products --}}
-    <div class="pt-12">
-        @includeIf('shop.partials.hero-section')
-    </div>
-
     {{-- HERO SECTION WITH CONTENT - Moved Below Recent Products --}}
     <section class="relative w-full bg-white py-16">
         {{-- Hero slider container with content --}}
@@ -561,8 +556,8 @@
     }
     </style>
 
-    {{-- PROMO CARDS / COLLECTIONS --}}
-    @includeIf('shop.partials.promo-cards-section')
+    {{-- PROMO SECTION --}}
+    @includeIf('shop.partials.promo-section')
 
     {{-- FEATURES SECTION - Moved to bottom above footer --}}
     @includeIf('shop.partials.features-section')
