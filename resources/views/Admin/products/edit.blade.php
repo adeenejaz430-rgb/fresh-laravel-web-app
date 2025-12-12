@@ -140,11 +140,26 @@
                     @if($product->image)
                         <div class="mb-3">
                             <p class="text-sm text-gray-700 mb-1">Current Main Image:</p>
-                            <img
-                                src="{{ asset('storage/'.$product->image) }}"
-                                alt="Current main image"
-                                class="h-24 rounded border"
-                            >
+                            <div class="relative inline-block group">
+                                <img
+                                    src="{{ asset('storage/'.$product->image) }}"
+                                    alt="Current main image"
+                                    class="h-24 rounded border"
+                                >
+                                <button
+                                    type="button"
+                                    onclick="markMainImageForDeletion(this)"
+                                    class="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-lg delete-main-image-btn"
+                                    title="Remove main image (will be cleared on save)"
+                                >
+                                    ×
+                                </button>
+                                <div class="absolute inset-0 bg-red-500 bg-opacity-50 rounded border-2 border-red-500 hidden deletion-overlay-main">
+                                    <span class="absolute inset-0 flex items-center justify-center text-white font-bold text-xs">Will Delete</span>
+                                </div>
+                            </div>
+                            {{-- Hidden input for main image deletion --}}
+                            <input type="hidden" name="delete_main_image" id="deleteMainImageInput" value="0">
                         </div>
                     @endif
 
@@ -182,34 +197,31 @@
                     @if(count($validImages) > 0)
                         <div class="mb-3">
                             <p class="text-sm text-gray-700 mb-1">Current Gallery Images:</p>
-                            <div class="flex flex-wrap gap-2">
+                            <div class="flex flex-wrap gap-2" id="galleryContainer">
                                 @foreach($validImages as $index => $img)
-                                    <div class="relative group">
+                                    <div class="relative group gallery-item" data-image-path="{{ $img }}">
                                         <img
                                             src="{{ asset('storage/'.$img) }}"
                                             alt="Gallery image"
-                                            class="h-16 w-16 object-cover rounded border"
+                                            class="h-16 w-16 object-cover rounded border gallery-image"
                                             onerror="this.style.display='none';"
                                         >
-                                        <form 
-                                            method="POST" 
-                                            action="{{ route('admin.products.remove-image', $product) }}"
-                                            class="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            onsubmit="return confirm('Are you sure you want to remove this image?');"
+                                        <button
+                                            type="button"
+                                            onclick="markImageForDeletion({{ json_encode($img) }}, this)"
+                                            class="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-lg delete-image-btn"
+                                            title="Mark for deletion (will be removed on save)"
                                         >
-                                            @csrf
-                                            <input type="hidden" name="image_path" value="{{ $img }}">
-                                            <button
-                                                type="submit"
-                                                class="bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-lg"
-                                                title="Remove image"
-                                            >
-                                                ×
-                                            </button>
-                                        </form>
+                                            ×
+                                        </button>
+                                        <div class="absolute inset-0 bg-red-500 bg-opacity-50 rounded border-2 border-red-500 hidden deletion-overlay">
+                                            <span class="absolute inset-0 flex items-center justify-center text-white font-bold text-xs">Will Delete</span>
+                                        </div>
                                     </div>
                                 @endforeach
                             </div>
+                            {{-- Hidden inputs for images marked for deletion --}}
+                            <div id="deleteImagesContainer"></div>
                             @if(count($brokenImages) > 0)
                                 <p class="text-xs text-yellow-600 mt-1">
                                     {{ count($brokenImages) }} broken image(s) will be automatically removed on next update.
@@ -255,4 +267,83 @@
         </form>
     </div>
 </div>
+
+<script>
+    // Track which images are marked for deletion
+    const imagesToDelete = new Set();
+
+    function markImageForDeletion(imagePath, button) {
+        const container = button.closest('.gallery-item');
+        const overlay = container.querySelector('.deletion-overlay');
+        const deleteContainer = document.getElementById('deleteImagesContainer');
+        
+        if (imagesToDelete.has(imagePath)) {
+            // Unmark for deletion
+            imagesToDelete.delete(imagePath);
+            overlay.classList.add('hidden');
+            button.classList.remove('bg-red-700');
+            button.classList.add('bg-red-500');
+            
+            // Remove hidden input
+            const input = deleteContainer.querySelector(`input[value="${imagePath}"]`);
+            if (input) {
+                input.remove();
+            }
+        } else {
+            // Mark for deletion
+            imagesToDelete.add(imagePath);
+            overlay.classList.remove('hidden');
+            button.classList.remove('bg-red-500');
+            button.classList.add('bg-red-700');
+            
+            // Add hidden input
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'delete_images[]';
+            input.value = imagePath;
+            deleteContainer.appendChild(input);
+        }
+    }
+
+    // Handle main image deletion
+    let mainImageMarkedForDeletion = false;
+
+    function markMainImageForDeletion(button) {
+        const overlay = button.parentElement.querySelector('.deletion-overlay-main');
+        const deleteInput = document.getElementById('deleteMainImageInput');
+        
+        if (mainImageMarkedForDeletion) {
+            // Unmark for deletion
+            mainImageMarkedForDeletion = false;
+            overlay.classList.add('hidden');
+            button.classList.remove('bg-red-700');
+            button.classList.add('bg-red-500');
+            if (deleteInput) {
+                deleteInput.value = '0';
+            }
+        } else {
+            // Mark for deletion
+            mainImageMarkedForDeletion = true;
+            overlay.classList.remove('hidden');
+            button.classList.remove('bg-red-500');
+            button.classList.add('bg-red-700');
+            if (deleteInput) {
+                deleteInput.value = '1';
+            }
+        }
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Ensure delete container exists
+        if (!document.getElementById('deleteImagesContainer')) {
+            const container = document.createElement('div');
+            container.id = 'deleteImagesContainer';
+            const galleryContainer = document.getElementById('galleryContainer');
+            if (galleryContainer && galleryContainer.parentNode) {
+                galleryContainer.parentNode.insertBefore(container, galleryContainer.nextSibling);
+            }
+        }
+    });
+</script>
 @endsection

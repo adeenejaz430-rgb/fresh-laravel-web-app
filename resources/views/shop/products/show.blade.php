@@ -7,8 +7,49 @@
     $stock  = (int)($product->stock ?? $product->quantity ?? 0);
     $rating = (int)($product->rating ?? $product->average_rating ?? 0);
 
-    $mainImage = $product->main_image_url;       // accessor
-    $gallery   = $product->gallery_urls;         // accessor returns array of URLs
+    // Get main image URL
+    $mainImageUrl = $product->main_image_url;
+    
+    // Get gallery images (from images array field)
+    $galleryImages = $product->gallery_urls;
+    
+    // Build combined array: main image first, then gallery images
+    // This ensures main image is always included in the slider
+    $allImages = [];
+    
+    // Add main image as first item (if it exists and is not placeholder)
+    if (!empty($product->image)) {
+        $mainImagePath = asset('storage/' . ltrim($product->image, '/'));
+        if (!in_array($mainImagePath, $allImages)) {
+            $allImages[] = $mainImagePath;
+        }
+    }
+    
+    // Add gallery images (excluding main image to avoid duplicates)
+    foreach ($galleryImages as $galleryImg) {
+        // Check if this gallery image is the same as main image
+        $isMainImage = false;
+        if (!empty($product->image)) {
+            $mainImagePath = asset('storage/' . ltrim($product->image, '/'));
+            if ($galleryImg === $mainImagePath) {
+                $isMainImage = true;
+            }
+        }
+        
+        // Only add if not duplicate and not the main image
+        if (!$isMainImage && !in_array($galleryImg, $allImages)) {
+            $allImages[] = $galleryImg;
+        }
+    }
+    
+    // Fallback: if no images at all, use main image URL (even if placeholder)
+    if (empty($allImages)) {
+        $allImages = [$mainImageUrl];
+    }
+    
+    // Use combined array for gallery slider
+    $gallery = $allImages;
+    $mainImage = $allImages[0]; // Ensure main image uses first item from combined array
 @endphp
 
 <div class="bg-gray-50 min-h-screen">

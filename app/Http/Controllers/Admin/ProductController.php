@@ -121,71 +121,85 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product)
     {
+        // Validate basic fields
         $data = $request->validate([
-            'name'        => ['required', 'string', 'max:255'],
-            'category'    => ['required', 'string', 'exists:categories,slug'],
-            'price'       => ['required', 'numeric', 'min:0'],
-            'quantity'    => ['required', 'integer', 'min:0'],
-            'description' => ['required', 'string'],
-            'featured'    => ['nullable', 'boolean'],
-            'image'       => ['nullable', 'image', 'max:4096'], // Main image
-            'gallery'     => ['nullable', 'array'],
-            'gallery.*'   => ['image', 'max:4096'], // Each gallery image
+            'name'            => ['required', 'string', 'max:255'],
+            'category'        => ['required', 'string', 'exists:categories,slug'],
+            'price'           => ['required', 'numeric', 'min:0'],
+            'quantity'        => ['required', 'integer', 'min:0'],
+            'description'     => ['required', 'string'],
+            'featured'        => ['nullable', 'boolean'],
+            'image'           => ['nullable', 'image', 'max:4096'], // Main image
+            'gallery'         => ['nullable', 'array'],
+            'gallery.*'       => ['image', 'max:4096'], // New gallery images
+            'delete_images'  => ['nullable', 'array'], // Images to delete
+            'delete_images.*' => ['string'], // Image paths to delete
+            'delete_main_image' => ['nullable', 'in:0,1'], // Flag to delete main image
         ]);
 
-        $data['slug']     = Str::slug($data['name']);
+        // Update basic fields
+        $data['slug'] = Str::slug($data['name']);
         $data['featured'] = $request->boolean('featured');
 
-        // Handle main image upload
+        // Handle main image deletion/replacement (completely separate from gallery)
+        $deleteMainImage = $request->input('delete_main_image') == '1';
+        
         if ($request->hasFile('image')) {
+            // New main image uploaded - replace existing one
             // Delete old main image if exists
-            if ($product->image) {
+            if ($product->image && Storage::disk('public')->exists($product->image)) {
                 Storage::disk('public')->delete($product->image);
             }
-
+            // Store new main image
             $data['image'] = $request->file('image')->store('products', 'public');
+        } elseif ($deleteMainImage) {
+            // Main image marked for deletion and no new image uploaded
+            // Delete the file from storage
+            if ($product->image && Storage::disk('public')->exists($product->image)) {
+                Storage::disk('public')->delete($product->image);
+            }
+            // Clear main image in database
+            $data['image'] = null;
         } else {
-            // Keep existing main image if not replaced
+            // Keep existing main image - don't touch it
             unset($data['image']);
         }
 
-        // Handle gallery images - ADD to existing gallery
-        $mainImage = $data['image'] ?? $product->image;
+        // Handle gallery images
+        // Start with existing gallery images
+        $galleryImages = $product->images ?? [];
         
-        // Start with existing images
-        $existingImages = $product->images ?? [];
-        $oldMainImage = $product->image;
-        
-        // If main image changed, update it in the gallery
-        if ($oldMainImage && $oldMainImage !== $mainImage) {
-            // Remove old main image from gallery
-            $existingImages = array_filter($existingImages, fn($img) => $img !== $oldMainImage);
-        }
-        
-        // Build gallery array starting with main image
-        $galleryImages = [];
-        
-        // Add main image as first image if it exists
-        if ($mainImage) {
-            $galleryImages[] = $mainImage;
-        }
-        
-        // Add existing gallery images (excluding main image to avoid duplicates)
-        // Also filter out broken/missing images
-        foreach ($existingImages as $existingImg) {
-            if ($existingImg !== $mainImage && !empty($existingImg)) {
-                // Check if file actually exists
-                if (Storage::disk('public')->exists($existingImg)) {
-                    $galleryImages[] = $existingImg;
-                }
+        // Ensure it's an array
+        if (!is_array($galleryImages)) {
+            $galleryImages = is_string($galleryImages) ? json_decode($galleryImages, true) : [];
+            if (!is_array($galleryImages)) {
+                $galleryImages = [];
             }
         }
-        
-        // ADD new gallery images (don't replace, just add)
+
+        // Step 1: Remove images marked for deletion
+        $imagesToDelete = $request->input('delete_images', []);
+        if (!empty($imagesToDelete) && is_array($imagesToDelete)) {
+            foreach ($imagesToDelete as $imagePath) {
+                // Remove from array
+                $galleryImages = array_filter($galleryImages, function($img) use ($imagePath) {
+                    return $img !== $imagePath;
+                });
+                
+                // Delete file from storage
+                if (Storage::disk('public')->exists($imagePath)) {
+                    Storage::disk('public')->delete($imagePath);
+                }
+            }
+            // Re-index array after filtering
+            $galleryImages = array_values($galleryImages);
+        }
+
+        // Step 2: Add new gallery images (append, don't replace)
         if ($request->hasFile('gallery')) {
             $galleryFiles = $request->file('gallery');
             
-            // Laravel returns array when multiple files are uploaded with gallery[]
+            // Handle both single file and array of files
             if (!is_array($galleryFiles)) {
                 $galleryFiles = [$galleryFiles];
             }
@@ -194,34 +208,31 @@ class ProductController extends Controller
                 if ($file && $file->isValid()) {
                     try {
                         $storedPath = $file->store('products', 'public');
-                        // Don't add if it's the same as main image or already exists
-                        if (!empty($storedPath) && $storedPath !== $mainImage && !in_array($storedPath, $galleryImages)) {
-                            $galleryImages[] = $storedPath;
+                        if (!empty($storedPath)) {
+                            // Only add if not already in gallery (avoid duplicates)
+                            if (!in_array($storedPath, $galleryImages)) {
+                                $galleryImages[] = $storedPath;
+                            }
                         }
                     } catch (\Exception $e) {
-                        // Log error but continue processing other files
                         \Log::error('Gallery image upload failed: ' . $e->getMessage());
                     }
                 }
             }
         }
-        
-        // Clean up: Remove any broken/missing images from the array
+
+        // Step 3: Clean up - remove any broken/missing images
         $validGalleryImages = [];
         foreach ($galleryImages as $img) {
             if (!empty($img) && Storage::disk('public')->exists($img)) {
                 $validGalleryImages[] = $img;
             }
         }
-        
-        // Set images array (always update to ensure main image is first)
-        if ($mainImage || !empty($validGalleryImages)) {
-            $data['images'] = array_values(array_unique($validGalleryImages));
-        } else {
-            // No images at all
-            $data['images'] = [];
-        }
 
+        // Update gallery images array (only if we have images or explicitly cleared)
+        $data['images'] = array_values(array_unique($validGalleryImages));
+
+        // Update product with all changes
         $product->update($data);
 
         return redirect()

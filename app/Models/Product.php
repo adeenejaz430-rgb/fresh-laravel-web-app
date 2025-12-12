@@ -14,8 +14,9 @@ class Product extends Model
         'slug',
         'description',
         'price',
-        'images',
-        'category',       // 👈 slug string
+        'image',         // Main image
+        'images',        // Gallery images array
+        'category',      // 👈 slug string
         'featured',
         'quantity',
         'average_rating',
@@ -54,6 +55,13 @@ class Product extends Model
       
     public function getMainImageUrlAttribute()
     {
+        // Priority 1: Use the main image field if it exists
+        if (!empty($this->image)) {
+            $path = $this->image;
+            return asset('storage/' . ltrim($path, '/'));
+        }
+
+        // Priority 2: Fall back to first gallery image if main image doesn't exist
         $images = $this->images ?? [];
 
         // If somehow stored as JSON string, decode it
@@ -62,16 +70,13 @@ class Product extends Model
             $images = is_array($decoded) ? $decoded : [];
         }
 
-        if (!empty($images)) {
+        if (!empty($images) && !empty($images[0])) {
             $path = $images[0];
-        } elseif (!empty($this->image)) {
-            $path = $this->image;
-        } else {
-            return asset('/flower.png'); // fallback
+            return asset('storage/' . ltrim($path, '/'));
         }
 
-        // Always turn storage path into public URL
-        return asset('storage/' . ltrim($path, '/'));
+        // Priority 3: Fallback to placeholder
+        return asset('/flower.png');
     }
 
     /**
