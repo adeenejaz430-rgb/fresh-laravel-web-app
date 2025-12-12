@@ -62,14 +62,8 @@
                         $stockQty = (int)($product->quantity ?? 0);
                         $rating = (int)($product->average_rating ?? 0);
                         
-                        // Handle images properly
-                        if (is_string($product->images)) {
-                            $images = json_decode($product->images, true) ?: [];
-                        } else {
-                            $images = is_array($product->images) ? $product->images : [];
-                        }
-                        
-                        $firstImage = !empty($images) ? $images[0] : '/images/placeholder.jpg';
+                        // Use the accessor that properly converts storage path to URL
+                        $firstImage = $product->main_image_url;
                     @endphp
 
                     <div class="bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border-2 border-gray-100 hover:border-pink-300 group">
@@ -80,7 +74,7 @@
                                     src="{{ $firstImage }}"
                                     alt="{{ $product->name }}"
                                     class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                                    onerror="this.onerror=null;this.src='/images/placeholder.jpg';"
+                                    onerror="this.onerror=null;this.src='{{ asset('/flower.png') }}';"
                                 />
                             </a>
 
@@ -138,8 +132,9 @@
                             {{-- Action Buttons --}}
                             <div class="flex gap-2">
                                 {{-- Add to Cart --}}
-                                <form method="POST" action="{{ route('cart.add', $product->id) }}" class="flex-1">
+                                <form class="add-to-cart-form flex-1" data-product-id="{{ $product->id }}" data-product-name="{{ $product->name }}" onclick="event.stopPropagation();">
                                     @csrf
+                                    <input type="hidden" name="quantity" value="1">
                                     <button
                                         type="submit"
                                         @if($stockQty === 0) disabled @endif
@@ -186,4 +181,202 @@
         @endif
     </div>
 </div>
+
+@push('scripts')
+<script>
+(function() {
+    // Update cart count function
+    function updateCartCount() {
+        fetch('/cart/count', {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            },
+            credentials: 'same-origin'
+        })
+        .then(response => response.json())
+        .then(data => {
+            const cartBadges = document.querySelectorAll('.cart-count-badge, #cartItemCount');
+            cartBadges.forEach(badge => {
+                if (badge) {
+                    badge.textContent = data.count || 0;
+                    if (data.count > 0) {
+                        badge.classList.remove('hidden');
+                    }
+                }
+            });
+        })
+        .catch(error => console.error('Error updating cart count:', error));
+    }
+
+    // Toast notification function
+    function showToast(message, type = 'success') {
+        const existingToasts = document.querySelectorAll('.toast-notification');
+        existingToasts.forEach(toast => toast.remove());
+        
+        const colors = {
+            success: 'bg-green-500',
+            error: 'bg-red-500',
+            info: 'bg-blue-500'
+        };
+        
+        const icons = {
+            success: '✓',
+            error: '✗',
+            info: 'ℹ'
+        };
+        
+        const toast = document.createElement('div');
+        toast.className = `toast-notification fixed bottom-4 right-4 ${colors[type]} text-white px-6 py-4 rounded-xl shadow-2xl z-50 flex items-center gap-3 transform transition-all duration-300`;
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(100px)';
+        
+        toast.innerHTML = `
+            <span class="text-2xl font-bold">${icons[type]}</span>
+            <span class="font-semibold">${message}</span>
+        `;
+        
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateY(0)';
+        }, 10);
+        
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(100px)';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    // Initialize Add to Cart functionality
+    function initializeAddToCart() {
+        const addToCartForms = document.querySelectorAll('.add-to-cart-form');
+        
+        addToCartForms.forEach(form => {
+            // Skip if already has listener
+            if (form.dataset.listenerAttached === 'true') {
+                return;
+            }
+            form.dataset.listenerAttached = 'true';
+            
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const button = this.querySelector('button[type="submit"]');
+                if (!button) return;
+                
+                const productId = this.dataset.productId;
+                const productName = this.dataset.productName;
+                
+                if (!productId) {
+                    console.error('Product ID not found');
+                    return;
+                }
+                
+                const originalContent = button.innerHTML;
+                
+                // Get CSRF token
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || 
+                                 this.querySelector('input[name="_token"]')?.value;
+                
+                if (!csrfToken) {
+                    console.error('CSRF token not found');
+                    showToast('Security token missing. Please refresh the page.', 'error');
+                    return;
+                }
+                
+                // Check if user is authenticated
+                @guest
+                    showToast('Please sign in to add items to cart', 'info');
+                    setTimeout(() => {
+                        window.location.href = '{{ route("login") }}';
+                    }, 1500);
+                    return;
+                @endguest
+                
+                // Disable button and show loading
+                button.disabled = true;
+                button.innerHTML = `
+                    <svg class="animate-spin h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Adding...</span>
+                `;
+                
+                // Make AJAX request
+                fetch(`/cart/${productId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        quantity: 1
+                    }),
+                    credentials: 'same-origin'
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        // Show success feedback
+                        button.innerHTML = `
+                            <svg class="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            <span>Added!</span>
+                        `;
+                        
+                        // Update cart count
+                        updateCartCount();
+                        
+                        // Show toast notification
+                        showToast(`${productName} added to cart!`, 'success');
+                        
+                        // Small delay to ensure server has processed the cart update
+                        setTimeout(() => {
+                            // Open cart sidebar - it will refresh the cart content internally before opening
+                            if (typeof openCartSidebar === 'function') {
+                                openCartSidebar();
+                            }
+                        }, 100);
+                        
+                        // Reset button after 2 seconds
+                        setTimeout(() => {
+                            button.innerHTML = originalContent;
+                            button.disabled = false;
+                        }, 2000);
+                    } else {
+                        showToast(data.message || 'Failed to add product', 'error');
+                        button.innerHTML = originalContent;
+                        button.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Add to cart error:', error);
+                    showToast('An error occurred. Please try again.', 'error');
+                    button.innerHTML = originalContent;
+                    button.disabled = false;
+                });
+            });
+        });
+    }
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeAddToCart();
+    });
+})();
+</script>
+@endpush
 @endsection
