@@ -16,7 +16,7 @@
         <div class="container mx-auto px-4 py-16 md:py-24 relative z-10">
             {{-- Breadcrumb --}}
             <nav class="flex items-center gap-2 text-sm text-white/80 mb-8">
-                <a href="{{ route('home') }}" class="hover:text-white transition-colors">Home</a>
+               
                 <span>/</span>
                 <a href="{{ route('products.index') }}" class="hover:text-white transition-colors">Products</a>
                 <span>/</span>
